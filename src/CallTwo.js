@@ -32,6 +32,8 @@ const CallTwo = () => {
 
   const { id } = useContext(GlobalContext);
 
+  let reurl = 1;
+
   const [conn, setConn] = useState(
     new WebSocket(`ws://10.0.2.2:3000?userName=${id}`)
   );
@@ -43,7 +45,7 @@ const CallTwo = () => {
     new RTCPeerConnection({
       iceServers: [
         {
-          url: "stun:stun.l.google.com:19302",
+          urls: "stun:stun.l.google.com:19302",
         },
         {
           urls: "turn:relay1.expressturn.com:3478",
@@ -158,18 +160,18 @@ const CallTwo = () => {
 
     let isFront = false;
 
+    // Create a new MediaStream for the local video feed
+
     mediaDevices
-      .getUserMedia({
-        audio: true,
-        video: {
-          mandatory: {
-            minWidth: 500, // Provide your own width, height and frame rate here
-            minHeight: 300,
-            minFrameRate: 30,
-          },
-          facingMode: "user",
-        },
-      })
+    .getUserMedia({
+      audio: true,
+      video: {
+        width: { min: 500 },
+        height: { min: 300 },
+        frameRate: { min: 30 },
+        facingMode: "user",
+      },
+    })
       .then((stream) => {
         // Got stream!
         setLocalStream(stream);
@@ -187,9 +189,22 @@ const CallTwo = () => {
         console.log("error adding stream", error);
       });
 
+    const remoteStream = new MediaStream();
+
     yourConn.ontrack = (event) => {
-      // setRemoteStream(null)
-      const remoteStream = event.streams[0];
+      const track = event.track;
+      if (track) {
+        console.log("Received track:", track);
+
+        // Add the incoming track to the remoteStream
+        remoteStream.addTrack(track);
+
+        // Set the remoteStream to update the UI with the remote video feed
+        setRemoteStream(remoteStream);
+      }
+    };
+
+    yourConn.ontrack = (event) => {
       const stream = event.streams[0];
 
       console.log(
@@ -202,21 +217,29 @@ const CallTwo = () => {
         Array.isArray(stream._tracks) &&
         stream._tracks.length > 0
       ) {
-        // const audioTrack = stream._tracks.find(track => track.kind === 'audio');
-        // const videoTrack = stream._tracks.find(track => track.kind === 'video');
-
-        const audioTrack = remoteStream.getAudioTracks()[0];
-        const videoTrack = remoteStream.getVideoTracks()[0];
+        const audioTrack = stream._tracks.find(
+          (track) => track.kind === "audio"
+        );
+        const videoTrack = stream._tracks.find(
+          (track) => track.kind === "video"
+        );
 
         if (audioTrack && videoTrack) {
-          const newStream = new MediaStream([audioTrack, videoTrack]);
+          // const newStream = new MediaStream([audioTrack, videoTrack]);
 
-          // Display the new stream in the <RTCView> component
-          setRemoteStream(newStream);
+          // setRemoteStream(newStream);
+
+          const remote = new MediaStream();
+
+          event.streams[0].getTracks().forEach((track) => {
+            remote.addTrack(track);
+          });
+
+          setRemoteStream(remote);
 
           console.log(
-            "The stream contains both audio and video tracks=================:",
-            newStream.toURL()
+            "<<<<<<<<<<<<<<<The stream contains both audio and video tracks=================:",
+            remote.toURL()
           );
         } else if (audioTrack) {
           console.log("The stream contains only an audio track:", stream);
@@ -237,8 +260,6 @@ const CallTwo = () => {
 
     // Setup ice handling
 
-    // yourConn.ontrack =  track()
-
     yourConn.onicecandidate = (event) => {
       console.log("can");
       if (event.candidate) {
@@ -251,38 +272,35 @@ const CallTwo = () => {
     };
   }, [conn]);
 
-  useEffect(() => {
-    if (remoteStream) {
-      console.log("Remote stream:", remoteStream);
+  // useEffect(() => {
+  //   if (remoteStream) {
+  //     console.log("Remote stream:", remoteStream);
 
-      if (remoteStream.getTracks().length === 0) {
-        console.error("Remote stream does not contain any tracks");
-      } else {
-        const audioTracks = remoteStream.getAudioTracks();
-        const videoTracks = remoteStream.getVideoTracks();
+  //     if (remoteStream.getTracks().length === 0) {
+  //       console.error("Remote stream does not contain any tracks");
+  //     } else {
+  //       const audioTracks = remoteStream.getAudioTracks();
+  //       const videoTracks = remoteStream.getVideoTracks();
 
-        if (audioTracks.length === 0 && videoTracks.length === 0) {
-          console.log(
-            "=====Remote stream does not contain audio or video tracks::===",
-            remoteStream
-          );
-        } else if (audioTracks.length === 0) {
-          console.log("Remote stream contains only video tracks");
-        } else if (videoTracks.length === 0) {
-          console.log("Remote stream contains only audio tracks");
-        } else if (audioTracks.length > 0 && videoTracks.length > 0) {
-          // const newStream = new MediaStream([audioTracks, videoTracks]);
+  //       if (audioTracks.length === 0 && videoTracks.length === 0) {
+  //         console.log(
+  //           "=====Remote stream does not contain audio or video tracks::===",
+  //           remoteStream
+  //         );
+  //       } else if (audioTracks.length === 0) {
+  //         console.log("Remote stream contains only video tracks");
+  //       } else if (videoTracks.length === 0) {
+  //         console.log("Remote stream contains only audio tracks");
+  //       } else if (audioTracks.length > 0 && videoTracks.length > 0) {
 
-          // // Display the new stream in the <RTCView> component
-          setRemoteStream(remoteStream);
+  //         console.log("<<<<<<<<<<<<<<<<<<Remote stream contains both audio and video tracks");
 
-          console.log("Remote stream contains both audio and video tracks");
-        } else {
-          console.log("dont know the problemr");
-        }
-      }
-    }
-  }, [remoteStream]);
+  //       } else {
+  //         console.log("dont know the problemr");
+  //       }
+  //     }
+  //   }
+  // }, [remoteStream]);
 
   const send = (message) => {
     //attach the other peer username to our messages
@@ -468,7 +486,9 @@ const CallTwo = () => {
           {remoteStream !== null && (
             <RTCView
               streamURL={remoteStream.toURL()}
-              // objectFit={'cover'}
+              zOrder={2}
+              objectFit={"cover"}
+              mirror={true}
               style={styles.remoteVideo}
               onError={(error) =>
                 console.error("Error displaying video:", error)
