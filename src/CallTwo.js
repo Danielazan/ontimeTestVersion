@@ -38,7 +38,9 @@ const CallTwo = () => {
     new WebSocket(`ws://10.0.2.2:3000?userName=${id}`)
   );
 
-  // const [conn, setConn] = useState(new WebSocket(`ws:104.198.75.214?userName=${id}`));
+  // const [conn, setConn] = useState(
+  //   new WebSocket(`ws://104.198.75.214?userName=${id}`)
+  // );
 
   const [yourConn, setYourConn] = useState(
     //change the config as you need
@@ -163,15 +165,15 @@ const CallTwo = () => {
     // Create a new MediaStream for the local video feed
 
     mediaDevices
-    .getUserMedia({
-      audio: true,
-      video: {
-        width: { min: 500 },
-        height: { min: 300 },
-        frameRate: { min: 30 },
-        facingMode: "user",
-      },
-    })
+      .getUserMedia({
+        audio: true,
+        video: {
+          width: { min: 500 },
+          height: { min: 300 },
+          frameRate: { min: 30 },
+          facingMode: "user",
+        },
+      })
       .then((stream) => {
         // Got stream!
         setLocalStream(stream);
@@ -191,18 +193,18 @@ const CallTwo = () => {
 
     const remoteStream = new MediaStream();
 
-    yourConn.ontrack = (event) => {
-      const track = event.track;
-      if (track) {
-        console.log("Received track:", track);
+    // yourConn.ontrack = (event) => {
+    //   const track = event.track;
+    //   if (track) {
+    //     console.log("Received track:", track);
 
-        // Add the incoming track to the remoteStream
-        remoteStream.addTrack(track);
+    //     // Add the incoming track to the remoteStream
+    //     remoteStream.addTrack(track);
 
-        // Set the remoteStream to update the UI with the remote video feed
-        setRemoteStream(remoteStream);
-      }
-    };
+    //     // Set the remoteStream to update the UI with the remote video feed
+    //     setRemoteStream(remoteStream);
+    //   }
+    // };
 
     yourConn.ontrack = (event) => {
       const stream = event.streams[0];
@@ -260,6 +262,44 @@ const CallTwo = () => {
 
     // Setup ice handling
 
+    yourConn.addEventListener("iceconnectionstatechange", (event) => {
+
+      let otherUser= callToUsername
+
+      console.log("###############",callToUsername)
+
+      switch (yourConn.iceConnectionState) {
+        case "connected":
+          console.log(".........icecandiate connected............");
+          break;
+        case "checking":
+          console.log('checking....')
+          break;
+        case "completed":
+          // Handle the call being connected here
+          // For example, set video streams to visible
+          // setVideoVisible(true); // Assuming you have a state variable to control video visibility
+          console.log(
+            "<<<<<<<<<<<<<________ICE Connection State completed:_____",
+            yourConn.iceConnectionState
+          );
+          break;
+        case "failed":
+          // Handle the case where the ICE connection has failed
+          console.log("ICE Connection State:", yourConn.iceConnectionState);
+          console.log("ICE connection failed. Handle the failure scenario.");
+
+          // reconnecting()
+
+          
+          break;
+        default:
+          // Handle other ICE connection states if needed
+          console.log("ICE Connection State:", yourConn.iceConnectionState);
+          break;
+      }
+    });
+
     yourConn.onicecandidate = (event) => {
       console.log("can");
       if (event.candidate) {
@@ -313,10 +353,10 @@ const CallTwo = () => {
   };
 
   const onCall = () => {
-    setCalling(true);
+    // setCalling(true);
 
     connectedUser = callToUsername;
-    console.log("Caling to", callToUsername);
+    console.log("Caling to", connectedUser);
     // create an offer
 
     yourConn.createOffer().then((offer) => {
@@ -328,6 +368,8 @@ const CallTwo = () => {
           offer: offer,
           caller: id,
         });
+
+      
         // Send pc.localDescription to peer
       });
     });
@@ -360,6 +402,8 @@ const CallTwo = () => {
   //     console.log("Offerr Error", err);
   //   }
   // };
+
+
 
   const handleOffer = async (offer, name) => {
     // console.log(name + " is calling you.");
@@ -398,6 +442,16 @@ const CallTwo = () => {
     yourConn.addIceCandidate(new RTCIceCandidate(candidate));
   };
 
+const reconnecting = async () => {
+  onCall();
+
+  for (let i = 0; i < 10; i++) {
+    console.log("Waiting for 30 seconds...");
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+
+  onCall();
+};
   //hang up
   const hangUp = () => {
     send({
@@ -460,12 +514,30 @@ const CallTwo = () => {
 
         <Button
           title="Call"
-          onPress={onCall}
+          onPress={()=>{
+            console.log("calling",callToUsername)
+            connectedUser=callToUsername
+            reconnecting()
+          }}
           loading={calling}
 
           // Add your custom styling here
         >
           Call
+        </Button>
+
+        <Button
+          title="Call"
+          onPress={()=>{
+            console.log("calling",callToUsername)
+            connectedUser=callToUsername
+            acceptCall()
+          }}
+          loading={calling}
+
+          // Add your custom styling here
+        >
+          Answer
         </Button>
       </View>
 
