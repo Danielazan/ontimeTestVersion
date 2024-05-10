@@ -5,8 +5,9 @@ import {
   TextInput,
   Button,
   Platform,
+  Alert
 } from "react-native";
-import React, { useContext, useEffect, useState } from "react";
+import React, { useContext, useEffect, useState, useCallback } from "react";
 import {
   RTCPeerConnection,
   RTCIceCandidate,
@@ -58,7 +59,7 @@ const CallTwo = () => {
     })
   );
 
-  const [offer, setOffer] = useState(null);
+  const [offerStatus, setOfferStatus] = useState(true);
 
   const [callToUsername, setCallToUsername] = useState(null);
 
@@ -263,17 +264,16 @@ const CallTwo = () => {
     // Setup ice handling
 
     yourConn.addEventListener("iceconnectionstatechange", (event) => {
+      let otherUser = callToUsername;
 
-      let otherUser= callToUsername
-
-      console.log("###############",callToUsername)
+      console.log("###############", callToUsername);
 
       switch (yourConn.iceConnectionState) {
         case "connected":
           console.log(".........icecandiate connected............");
           break;
         case "checking":
-          console.log('checking....')
+          console.log("checking....");
           break;
         case "completed":
           // Handle the call being connected here
@@ -291,7 +291,6 @@ const CallTwo = () => {
 
           // reconnecting()
 
-          
           break;
         default:
           // Handle other ICE connection states if needed
@@ -369,7 +368,6 @@ const CallTwo = () => {
           caller: id,
         });
 
-      
         // Send pc.localDescription to peer
       });
     });
@@ -403,21 +401,79 @@ const CallTwo = () => {
   //   }
   // };
 
+  // const handleOffer = useCallback(async (offer, name) => {
+  //   console.log(name + " is calling you.");
+  //   console.log("Accepting Call===========>", offer);
+  //   connectedUser = name;
+    
+  //   const handleOfferLogic = async () => {
+  //     try {
+  //       await yourConn.setRemoteDescription(new RTCSessionDescription(offer));
+  //       const answer = await yourConn.createAnswer();
+  //       await yourConn.setLocalDescription(answer);
+  //       send({ type: "answer", answer: answer });
+  //     } catch (err) {
+  //       console.log("Offer Error", err);
+  //     }
+  //   };
+  
+  //   if (offerStatus) {
+  //     handleOfferLogic();
+  //   } else {
+  //     console.log("Waiting for offerStatus to be true...");
+  //     // You can add additional logic here, such as retrying or waiting for offerStatus to be true
+  //   }
+  // }, [offerStatus]);
 
-
+  
   const handleOffer = async (offer, name) => {
-    // console.log(name + " is calling you.");
-    // console.log("Accepting Call===========>", offer);
-    connectedUser = name;
-    try {
+    return new Promise((resolve, reject) => {
+      Alert.alert(
+        `${name} is calling. Accept call?`,
+        "",
+        [
+          { text: "Cancel", onPress: () => reject("Call rejected") },
+          { text: "Accept", onPress: () => resolve("Call accepted") },
+        ]
+      );
+    })
+    .then(async(response) => {
+      if (response === "Call accepted") {
+        // setOffer(offer);
+        console.log("Call accepted by user.",offer);
+        connectedUser = name;
+
+          try {
       await yourConn.setRemoteDescription(new RTCSessionDescription(offer));
+
+      yourConn.ontrack = (event) => {
+        console.log("Track added", event);
+        setRemoteStream(event.streams[0]);
+      };
+
       const answer = await yourConn.createAnswer();
+
       await yourConn.setLocalDescription(answer);
-      send({ type: "answer", answer: answer });
+      send({
+        type: "answer",
+        answer: answer,
+        // To:callToUsername
+      });
     } catch (err) {
       console.log("Offerr Error", err);
     }
-  };
+        
+      } else {
+        console.log("Call rejected by user.");
+        // Optionally, send a "reject" message to the caller
+      }
+    })
+    .catch((error) => {
+      console.log(error);
+      // Handle the case when the user cancels or rejects the call
+      // Optionally, send a "reject" message to the caller
+    });
+  }
 
   //when we got an answer from a remote user
   const handleAnswer = (answer) => {
@@ -442,16 +498,16 @@ const CallTwo = () => {
     yourConn.addIceCandidate(new RTCIceCandidate(candidate));
   };
 
-const reconnecting = async () => {
-  onCall();
+  const reconnecting = async () => {
+    onCall();
 
-  for (let i = 0; i < 10; i++) {
-    console.log("Waiting for 30 seconds...");
-    await new Promise(resolve => setTimeout(resolve, 1000));
-  }
+    for (let i = 0; i < 10; i++) {
+      console.log("Waiting for 30 seconds...");
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
 
-  onCall();
-};
+    onCall();
+  };
   //hang up
   const hangUp = () => {
     send({
@@ -471,24 +527,32 @@ const reconnecting = async () => {
   };
 
   const acceptCall = async () => {
-    console.log("Accepting Call===========>", offer);
-    connectedUser = offer.name;
-
-    try {
-      await yourConn.setRemoteDescription(new RTCSessionDescription(offer));
-
-      const answer = await yourConn.createAnswer();
-
-      await yourConn.setLocalDescription(answer);
-
-      send({
-        type: "answer",
-        answer: answer,
-      });
-    } catch (err) {
-      console.log("Offerr Error", err);
-    }
+    // setOfferStatus(true)
+    console.log("answering")
   };
+
+  // const acceptCall = useCallback(async() => {
+  //   console.log("Accepting Call===========>", offer);
+  //   connectedUser = offer.name;
+  //   if (offer != null) {
+  //     try {
+  //       await yourConn.setRemoteDescription(new RTCSessionDescription(offer));
+
+  //       const answer = await yourConn.createAnswer();
+
+  //       await yourConn.setLocalDescription(answer);
+
+  //       send({
+  //         type: "answer",
+  //         answer: answer,
+  //       });
+  //     } catch (err) {
+  //       console.log("Offerr Error", err);
+  //     }
+  //     console.log("offer is nnot null", offer);
+  //   }
+  // }, [offer]);
+
   const rejectCall = async () => {
     send({
       type: "leave",
@@ -514,10 +578,10 @@ const reconnecting = async () => {
 
         <Button
           title="Call"
-          onPress={()=>{
-            console.log("calling",callToUsername)
-            connectedUser=callToUsername
-            reconnecting()
+          onPress={() => {
+            console.log("calling", callToUsername);
+            connectedUser = callToUsername;
+            reconnecting();
           }}
           loading={calling}
 
@@ -527,11 +591,11 @@ const reconnecting = async () => {
         </Button>
 
         <Button
-          title="Call"
-          onPress={()=>{
-            console.log("calling",callToUsername)
-            connectedUser=callToUsername
-            acceptCall()
+          title="Answer"
+          onPress={() => {
+            console.log("calling", callToUsername);
+            connectedUser = callToUsername;
+            acceptCall();
           }}
           loading={calling}
 
